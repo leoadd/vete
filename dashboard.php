@@ -73,7 +73,7 @@ for ($i = 0; $i < 7; $i++) {
     <title>Panel de Citas - VetCitas</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
-<body style="background: #f5f7fa; min-height: 100vh;">
+<body class="dashboard-body"> <!-- Added class for dashboard specific body styling -->
     
     <!-- Header -->
     <div class="header">
@@ -83,12 +83,20 @@ for ($i = 0; $i < 7; $i++) {
                 <p>Bienvenido, <strong><?php echo htmlspecialchars($_SESSION['user_name']); ?></strong></p>
             </div>
             <div>
+                <a href="settings.php" class="btn btn-secondary" style="width: auto; padding: 10px 20px; margin-right: 10px;">Ajustes</a>
                 <a href="logout.php" class="btn btn-secondary" style="width: auto; padding: 10px 20px;">Cerrar Sesión</a>
             </div>
         </div>
     </div>
 
     <div class="dashboard-container">
+
+        <?php if (isset($_SESSION['success_message'])): ?>
+            <div class="alert success" style="margin-bottom: 20px;"><?php echo $_SESSION['success_message']; unset($_SESSION['success_message']); ?></div>
+        <?php endif; ?>
+        <?php if (isset($_SESSION['error_message'])): ?>
+            <div class="alert error" style="margin-bottom: 20px;"><?php echo $_SESSION['error_message']; unset($_SESSION['error_message']); ?></div>
+        <?php endif; ?>
         
         <!-- Mis Citas -->
         <?php if (!empty($user_appointments)): ?>
@@ -102,15 +110,61 @@ for ($i = 0; $i < 7; $i++) {
                             <strong><?php echo $appointment['formatted_date']; ?> a las <?php echo $appointment['formatted_time']; ?></strong><br>
                             <small>Mascota: <?php echo htmlspecialchars($appointment['pet_name']); ?> | Servicio: <?php echo htmlspecialchars($appointment['service']); ?></small>
                         </div>
-                        <span style="background: #28a745; color: white; padding: 5px 15px; border-radius: 20px; font-size: 12px;">
-                            <?php echo ucfirst($appointment['status']); ?>
-                        </span>
+                        <div>
+                            <span style="background: #28a745; color: white; padding: 5px 15px; border-radius: 20px; font-size: 12px; margin-right: 10px;">
+                                <?php echo ucfirst($appointment['status']); ?>
+                            </span>
+                            <button class="btn-action btn-edit" onclick="openEditModal(<?php echo htmlspecialchars(json_encode($appointment)); ?>)">Editar</button>
+                            <button class="btn-action btn-delete" onclick="confirmDelete(<?php echo $appointment['id']; ?>)">Eliminar</button>
+                        </div>
                     </div>
                 </div>
                 <?php endforeach; ?>
             </div>
         </div>
         <?php endif; ?>
+
+        <!-- Modal para Editar Cita -->
+        <div id="edit-appointment-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close-button" onclick="closeEditModal()">&times;</span>
+                <h3>✏️ Editar Cita</h3>
+                <form id="edit-appointment-form" method="POST" action="manage_appointment.php">
+                    <input type="hidden" name="action" value="update">
+                    <input type="hidden" id="edit-appointment-id" name="appointment_id">
+
+                    <div class="form-group">
+                        <label for="edit-pet-name">Nombre de la mascota</label>
+                        <input type="text" id="edit-pet-name" name="pet_name" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit-service">Tipo de servicio</label>
+                        <select id="edit-service" name="service" required>
+                            <option value="Consulta general">Consulta general</option>
+                            <option value="Vacunación">Vacunación</option>
+                            <option value="Desparasitación">Desparasitación</option>
+                            <option value="Cirugía menor">Cirugía menor</option>
+                            <option value="Emergencia">Emergencia</option>
+                            <option value="Control de peso">Control de peso</option>
+                            <option value="Limpieza dental">Limpieza dental</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit-appointment-date">Fecha de la cita</label>
+                        <input type="date" id="edit-appointment-date" name="appointment_date" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit-appointment-time">Hora de la cita</label>
+                        <input type="time" id="edit-appointment-time" name="appointment_time" required>
+                    </div>
+
+                    <button type="submit" class="btn">Guardar Cambios</button>
+                </form>
+            </div>
+        </div>
 
         <!-- Reservar Nueva Cita -->
         <div class="booking-form">
@@ -202,6 +256,36 @@ for ($i = 0; $i < 7; $i++) {
                 slot.classList.remove('selected');
             });
             document.getElementById('booking-form').style.display = 'none';
+        }
+
+        function openEditModal(appointment) {
+            document.getElementById('edit-appointment-id').value = appointment.id;
+            document.getElementById('edit-pet-name').value = appointment.pet_name;
+            document.getElementById('edit-service').value = appointment.service;
+            // Format date to YYYY-MM-DD for input type="date"
+            const dateParts = appointment.formatted_date.split('/');
+            document.getElementById('edit-appointment-date').value = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;
+            document.getElementById('edit-appointment-time').value = appointment.appointment_time.substring(0,5); // HH:MM
+            document.getElementById('edit-appointment-modal').style.display = 'block';
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-appointment-modal').style.display = 'none';
+        }
+
+        function confirmDelete(appointmentId) {
+            if (confirm("¿Estás seguro de que deseas eliminar esta cita?")) {
+                // Redirect to a PHP script to handle deletion
+                window.location.href = `manage_appointment.php?action=delete&id=${appointmentId}`;
+            }
+        }
+
+        // Close modal if user clicks outside of it
+        window.onclick = function(event) {
+            const modal = document.getElementById('edit-appointment-modal');
+            if (event.target == modal) {
+                closeEditModal();
+            }
         }
     </script>
 </body>
