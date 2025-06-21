@@ -12,7 +12,7 @@ if (isset($_SESSION['user_id'])) {
 }
 
 // Procesar login
-if ($_POST['action'] === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+if (isset($_POST['action']) && $_POST['action'] === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = filter_var($_POST['email'], FILTER_SANITIZE_EMAIL);
     $password = $_POST['password'];
     
@@ -26,48 +26,65 @@ if ($_POST['action'] === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             if (password_verify($password, $user['password'])) {
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['user_name'] = $user['name'];
-                $_SESSION['user_email'] = $email;
+                $_SESSION['user_email'] = $email; // Guardar email en sesión
                 header('Location: dashboard.php');
                 exit;
             } else {
-                $error_message = "Credenciales incorrectas";
+                $error_message = "Credenciales incorrectas. Verifique su correo y contraseña.";
             }
         } else {
-            $error_message = "Usuario no encontrado";
+            $error_message = "Usuario no encontrado. Verifique el correo electrónico ingresado.";
         }
+        $stmt->close();
     } else {
-        $error_message = "Por favor complete todos los campos";
+        $error_message = "Por favor, complete todos los campos (correo y contraseña).";
     }
 }
 
 // Procesar registro
-if ($_POST['action'] === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+if (isset($_POST['action']) && $_POST['action'] === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = filter_var($_POST['email'], FILTER_SANITIZE_EMAIL);
     $password = $_POST['password'];
-    $name = htmlspecialchars($_POST['name']);
-    $phone = htmlspecialchars($_POST['phone']);
+    $name = htmlspecialchars(trim($_POST['name']));
+    $phone = htmlspecialchars(trim($_POST['phone']));
     
     if (filter_var($email, FILTER_VALIDATE_EMAIL) && !empty($password) && !empty($name)) {
         // Verificar si el email ya existe
-        $stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
-        $stmt->bind_param("s", $email);
-        $stmt->execute();
+        $stmt_check = $conn->prepare("SELECT id FROM users WHERE email = ?");
+        $stmt_check->bind_param("s", $email);
+        $stmt_check->execute();
         
-        if ($stmt->get_result()->num_rows > 0) {
-            $error_message = "Este email ya está registrado";
+        if ($stmt_check->get_result()->num_rows > 0) {
+            $error_message = "Este correo electrónico ya está registrado. Intente iniciar sesión.";
         } else {
-            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-            $stmt = $conn->prepare("INSERT INTO users (email, password, name, phone) VALUES (?, ?, ?, ?)");
-            $stmt->bind_param("ssss", $email, $hashed_password, $name, $phone);
-            
-            if ($stmt->execute()) {
-                $success_message = "Cuenta creada exitosamente. Ahora puedes iniciar sesión.";
+            if (strlen($password) < 6) {
+                 $error_message = "La contraseña debe tener al menos 6 caracteres.";
             } else {
-                $error_message = "Error al crear la cuenta";
+                $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+                $stmt_insert = $conn->prepare("INSERT INTO users (email, password, name, phone) VALUES (?, ?, ?, ?)");
+                $stmt_insert->bind_param("ssss", $email, $hashed_password, $name, $phone);
+
+                if ($stmt_insert->execute()) {
+                    $success_message = "¡Cuenta creada exitosamente! Ahora puede iniciar sesión.";
+                } else {
+                    $error_message = "Error al crear la cuenta. Por favor, inténtelo de nuevo.";
+                }
+                $stmt_insert->close();
             }
         }
+        $stmt_check->close();
     } else {
-        $error_message = "Por favor complete todos los campos obligatorios";
+        $error_message = "Por favor, complete todos los campos obligatorios (nombre, correo y contraseña).";
+    }
+}
+
+// Mostrar mensaje de logout si existe
+if (isset($_GET['message'])) {
+    $message_type = $_GET['type'] ?? 'info'; // 'success', 'error', 'info'
+    if ($message_type === 'success') {
+        $success_message = htmlspecialchars($_GET['message']);
+    } else {
+        $error_message = htmlspecialchars($_GET['message']); // O un $info_message si se desea diferenciar
     }
 }
 ?>
@@ -80,7 +97,7 @@ if ($_POST['action'] === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Veterinaria - Sistema de Citas</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
+<body style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"> <!-- Specific background for index.php -->
     <div class="container">
         <div class="logo">
             <h1>🐾 VetCitas</h1>

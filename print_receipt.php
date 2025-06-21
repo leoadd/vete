@@ -18,7 +18,7 @@ if (!$appointment_id || !is_numeric($appointment_id)) {
 
 // Obtener datos de la cita (solo del usuario logueado)
 $stmt = $conn->prepare("
-    SELECT a.*, u.name, u.email, u.phone,
+    SELECT a.*, u.name AS user_name, u.email AS user_email, u.phone AS user_phone,
     DATE_FORMAT(a.appointment_date, '%d/%m/%Y') as formatted_date,
     TIME_FORMAT(a.appointment_time, '%H:%i') as formatted_time,
     DATE_FORMAT(a.created_at, '%d/%m/%Y %H:%i:%s') as formatted_created
@@ -266,16 +266,16 @@ $qr_data = "Cita #{$appointment['id']} - {$appointment['formatted_date']} {$appo
                 <h3>📋 Información del Cliente</h3>
                 <div class="detail-row">
                     <span>Nombre:</span>
-                    <strong><?php echo htmlspecialchars($appointment['name']); ?></strong>
+                    <strong><?php echo htmlspecialchars($appointment['user_name']); ?></strong>
                 </div>
                 <div class="detail-row">
                     <span>Email:</span>
-                    <strong><?php echo htmlspecialchars($appointment['email']); ?></strong>
+                    <strong><?php echo htmlspecialchars($appointment['user_email']); ?></strong>
                 </div>
-                <?php if ($appointment['phone']): ?>
+                <?php if ($appointment['user_phone']): ?>
                 <div class="detail-row">
                     <span>Teléfono:</span>
-                    <strong><?php echo htmlspecialchars($appointment['phone']); ?></strong>
+                    <strong><?php echo htmlspecialchars($appointment['user_phone']); ?></strong>
                 </div>
                 <?php endif; ?>
             </div>
@@ -303,7 +303,7 @@ $qr_data = "Cita #{$appointment['id']} - {$appointment['formatted_date']} {$appo
 
         <!-- Estado -->
         <div class="status-section">
-            <div class="status">✅ CITA CONFIRMADA</div>
+            <div class="status">✅ CITA <?php echo strtoupper(htmlspecialchars($appointment['status'])); ?></div>
             <p>Reservado el: <?php echo $appointment['formatted_created']; ?></p>
         </div>
 

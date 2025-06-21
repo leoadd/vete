@@ -27,53 +27,60 @@ $user_id = $_SESSION['user_id'];
 
 // Validaciones
 if (empty($appointment_date) || empty($appointment_time) || empty($pet_name) || empty($service)) {
-    $error_message = 'Todos los campos son obligatorios';
+    $error_message = 'Todos los campos son obligatorios. Por favor, complete la información de la cita.';
 } else {
-    // Verificar que la fecha sea válida (no en el pasado)
-    if (strtotime($appointment_date) < strtotime(date('Y-m-d'))) {
-        $error_message = 'No se pueden reservar citas en fechas pasadas';
+    // Verificar que la fecha sea válida (no en el pasado, y con un margen, ej. no hoy para mañana)
+    $current_date_obj = new DateTime();
+    $appointment_date_obj = DateTime::createFromFormat('Y-m-d', $appointment_date);
+
+    if (!$appointment_date_obj) {
+        $error_message = 'Formato de fecha inválido.';
+    } elseif ($appointment_date_obj < $current_date_obj->setTime(0,0,0)) {
+        $error_message = 'No se pueden reservar citas en fechas pasadas.';
     } else {
-        // Verificar que el horario aún esté disponible
-        $stmt = $conn->prepare("
+        // Verificar que el horario aún esté disponible y sea válido
+        $stmt_check_slot = $conn->prepare("
             SELECT COUNT(*) as count 
-            FROM appointments 
-            WHERE appointment_date = ? AND appointment_time = ?
+            FROM available_slots
+            WHERE date = ? AND time = ? AND is_available = 1
         ");
-        $stmt->bind_param("ss", $appointment_date, $appointment_time);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $row = $result->fetch_assoc();
-        
-        if ($row['count'] > 0) {
-            $error_message = 'Este horario ya no está disponible';
+        $stmt_check_slot->bind_param("ss", $appointment_date, $appointment_time);
+        $stmt_check_slot->execute();
+        $slot_exists = $stmt_check_slot->get_result()->fetch_assoc()['count'] > 0;
+        $stmt_check_slot->close();
+
+        if (!$slot_exists) {
+            $error_message = 'El horario seleccionado no es válido o ya no está disponible.';
         } else {
-            // Verificar que el horario existe en available_slots
-            $stmt = $conn->prepare("
+            // Verificar si ya existe una cita para ese horario exacto
+            $stmt_check_appointment = $conn->prepare("
                 SELECT COUNT(*) as count 
-                FROM available_slots 
-                WHERE date = ? AND time = ? AND is_available = 1
+                FROM appointments
+                WHERE appointment_date = ? AND appointment_time = ?
             ");
-            $stmt->bind_param("ss", $appointment_date, $appointment_time);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            $row = $result->fetch_assoc();
-            
-            if ($row['count'] == 0) {
-                $error_message = 'Horario no válido';
+            $stmt_check_appointment->bind_param("ss", $appointment_date, $appointment_time);
+            $stmt_check_appointment->execute();
+            $appointment_taken = $stmt_check_appointment->get_result()->fetch_assoc()['count'] > 0;
+            $stmt_check_appointment->close();
+
+            if ($appointment_taken) {
+                $error_message = 'Este horario acaba de ser reservado por otra persona. Por favor, elija otro.';
             } else {
                 // Insertar la cita
-                $stmt = $conn->prepare("
+                $stmt_insert = $conn->prepare("
                     INSERT INTO appointments (user_id, pet_name, service, appointment_date, appointment_time, status) 
-                    VALUES (?, ?, ?, ?, ?, 'confirmed')
-                ");
-                $stmt->bind_param("issss", $user_id, $pet_name, $service, $appointment_date, $appointment_time);
+                    VALUES (?, ?, ?, ?, ?, 'Confirmada')
+                "); // Cambiado 'confirmed' a 'Confirmada'
+                $stmt_insert->bind_param("issss", $user_id, $pet_name, $service, $appointment_date, $appointment_time);
                 
-                if ($stmt->execute()) {
+                if ($stmt_insert->execute()) {
                     $appointment_id = $conn->insert_id;
                     $success = true;
+                    $_SESSION['success_message'] = "¡Cita reservada exitosamente!"; // Mensaje de éxito para dashboard
                 } else {
-                    $error_message = 'Error al procesar la reserva. Intente nuevamente.';
+                    $error_message = 'Error al procesar la reserva. Por favor, inténtelo de nuevo más tarde.';
                 }
+                $stmt_insert->close();
             }
         }
     }
@@ -86,19 +93,39 @@ if (!$success) {
     exit;
 }
 
-// Si fue exitoso, obtener datos para el recibo
-$stmt = $conn->prepare("
-    SELECT a.*, u.name, u.email, u.phone,
-    DATE_FORMAT(a.appointment_date, '%d/%m/%Y') as formatted_date,
-    TIME_FORMAT(a.appointment_time, '%H:%i') as formatted_time,
-    DATE_FORMAT(a.created_at, '%d/%m/%Y %H:%i') as formatted_created
-    FROM appointments a 
-    JOIN users u ON a.user_id = u.id 
-    WHERE a.id = ?
-");
-$stmt->bind_param("i", $appointment_id);
-$stmt->execute();
-$appointment = $stmt->get_result()->fetch_assoc();
+// Si fue exitoso, redirigir a la página de confirmación (este mismo script mostrará el HTML)
+// Solo asegurar que $appointment_id está seteado.
+
+// Obtener datos para el recibo (solo si $success es true y $appointment_id está disponible)
+$appointment = null; // Inicializar $appointment
+if ($success && $appointment_id) {
+    $stmt_get_appointment = $conn->prepare("
+        SELECT a.*, u.name AS user_name, u.email AS user_email, u.phone AS user_phone,
+        DATE_FORMAT(a.appointment_date, '%d/%m/%Y') as formatted_date,
+        TIME_FORMAT(a.appointment_time, '%H:%i') as formatted_time,
+        DATE_FORMAT(a.created_at, '%d/%m/%Y %H:%i') as formatted_created
+        FROM appointments a
+        JOIN users u ON a.user_id = u.id
+        WHERE a.id = ? AND a.user_id = ?
+    "); // Asegurar que la cita pertenece al usuario en sesión
+    $stmt_get_appointment->bind_param("ii", $appointment_id, $user_id);
+    $stmt_get_appointment->execute();
+    $appointment_result = $stmt_get_appointment->get_result();
+    if ($appointment_result->num_rows > 0) {
+        $appointment = $appointment_result->fetch_assoc();
+    } else {
+        // Si no se encuentra la cita para el usuario, es un error o intento de acceso indebido.
+        $_SESSION['error_message'] = "Error: No se pudo encontrar la cita confirmada.";
+        header('Location: dashboard.php');
+        exit;
+    }
+    $stmt_get_appointment->close();
+} elseif (!$success) {
+    // Si success es false, ya se habrá redirigido con un mensaje de error.
+    // Esta parte es por si acaso algo falla en la lógica de redirección.
+    header('Location: dashboard.php');
+    exit;
+}
 ?>
 
 <!DOCTYPE html>
@@ -122,18 +149,18 @@ $appointment = $stmt->get_result()->fetch_assoc();
             
             <div class="detail-row">
                 <span>Cliente:</span>
-                <span><?php echo htmlspecialchars($appointment['name']); ?></span>
+                <span><?php echo htmlspecialchars($appointment['user_name']); ?></span>
             </div>
             
             <div class="detail-row">
                 <span>Email:</span>
-                <span><?php echo htmlspecialchars($appointment['email']); ?></span>
+                <span><?php echo htmlspecialchars($appointment['user_email']); ?></span>
             </div>
             
-            <?php if ($appointment['phone']): ?>
+            <?php if ($appointment['user_phone']): ?>
             <div class="detail-row">
                 <span>Teléfono:</span>
-                <span><?php echo htmlspecialchars($appointment['phone']); ?></span>
+                <span><?php echo htmlspecialchars($appointment['user_phone']); ?></span>
             </div>
             <?php endif; ?>
             
@@ -159,7 +186,7 @@ $appointment = $stmt->get_result()->fetch_assoc();
             
             <div class="detail-row">
                 <span>Estado:</span>
-                <span style="color: #28a745;">CONFIRMADA</span>
+                <span style="color: #28a745; font-weight: bold;"><?php echo strtoupper(htmlspecialchars($appointment['status'])); ?></span>
             </div>
             
             <div class="detail-row">

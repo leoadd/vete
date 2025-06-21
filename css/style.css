@@ -8,27 +8,36 @@
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #f5f7fa;
     min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
 }
 
-.container {
+/* Styles for the main login/register container */
+/* This container is for index.php, ensuring it's centered */
+body:not(.dashboard-body) .container {
     background: white;
     border-radius: 20px;
     box-shadow: 0 20px 40px rgba(0,0,0,0.1);
     padding: 40px;
     width: 100%;
     max-width: 400px;
-    margin: 20px;
+    margin: 20px auto;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* Styles for the dashboard content area */
+.dashboard-body {
+    background: #f5f7fa;
 }
 
 .dashboard-container {
     max-width: 800px;
-    margin: 20px auto;
+    margin: 30px auto; /* Added top margin to account for header */
     padding: 20px;
+    width: 100%;
 }
 
 .logo {
@@ -251,10 +260,84 @@ body {
     color: #667eea;
 }
 
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.6);
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 10% auto;
+    padding: 30px;
+    border: 1px solid #888;
+    width: 80%;
+    max-width: 500px;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    position: relative;
+}
+
+.close-button {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    position: absolute;
+    top: 15px;
+    right: 25px;
+}
+
+.close-button:hover,
+.close-button:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+/* Action Buttons for Edit/Delete in appointment list */
+.btn-action {
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    border: none;
+    color: white;
+    margin-left: 5px;
+    transition: opacity 0.2s ease;
+}
+
+.btn-action:hover {
+    opacity: 0.8;
+}
+
+.btn-edit {
+    background-color: #ffc107; /* Amarillo */
+}
+
+.btn-delete {
+    background-color: #dc3545; /* Rojo */
+}
+
+
 @media (max-width: 768px) {
-    .container {
+    /* Ensure .container for login/register is handled correctly on small screens */
+    body:not(.dashboard-body) .container {
         margin: 10px;
         padding: 20px;
+        width: calc(100% - 20px); /* Adjust width */
+        position: relative; /* Change from absolute */
+        top: auto; /* Reset top */
+        left: auto; /* Reset left */
+        transform: none; /* Reset transform */
+        margin-top: 30px; /* Add some top margin */
     }
     
     .header-content {
